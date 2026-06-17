@@ -642,7 +642,36 @@ window.setPV=v=>{planFactoryView=v;mount('plan');};
 window.setPlanPhom=v=>{planPhom=Math.max(0,+v||0);saveState();mount('plan');};
 window.setPlanKhuon=v=>{planKhuon=Math.max(0,+v||0);saveState();mount('plan');};
 window.resolve=()=>{runSolver();mount('plan');};
-window.exportPlan=()=>alert('Export Excel: tạo workbook gồm 3 sheet — "KH LAF", "KH LVF", "Tổng hợp". (Trong prototype: minh hoạ luồng export.)');
+window.exportPlan=()=>{
+  try{
+    if(!planRows.length) runSolver();
+    const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    const vn=s=>s? String(s).split('-').reverse().join('/') : '';
+    const cell=v=>`<Cell><Data ss:Type="String">${esc(v)}</Data></Cell>`;
+    const num=v=>`<Cell><Data ss:Type="Number">${(+v)||0}</Data></Cell>`;
+    const row=c=>`<Row>${c}</Row>`;
+    const hd=(...ls)=>row(ls.map(l=>`<Cell ss:StyleID="hdr"><Data ss:Type="String">${esc(l)}</Data></Cell>`).join(''));
+    const late=r=>iso(r.end)>(r.deadline||'9999');
+    const HEAD=hd('Nhà máy','Lô/Nhóm','Mã màu','Bắt đầu','Kết thúc','Số ngày','SL/ngày','Tổng SL (đôi)','Deadline','Trạng thái');
+    const body=rows=>rows.map(r=>row(cell(r.factory)+cell(r.key)+cell(r.color)+cell(vn(iso(r.start)))+cell(vn(iso(r.end)))+num(r.days)+num(r.daily)+num(r.total)+cell(vn(r.deadline))+cell(late(r)?'TRỄ HẠN':'Đúng hạn'))).join('');
+    const laf=planRows.filter(r=>r.factory==='LAF');
+    const lvf=planRows.filter(r=>r.factory==='LVF');
+    const keys=[...new Set(planRows.map(r=>r.key))];
+    const totLvf=lvf.reduce((s,r)=>s+r.total,0);
+    const lateN=lvf.filter(late).length;
+    const kHead=hd('Lô/Nhóm','Mã màu','LAF bắt đầu','LAF kết thúc','LVF bắt đầu','LVF kết thúc','Tổng SL (đôi)','Deadline','Trạng thái');
+    const kBody=keys.map(k=>{const L=laf.find(r=>r.key===k),V=lvf.find(r=>r.key===k),B=V||L;return row(cell(k)+cell(B.color)+cell(L?vn(iso(L.start)):'')+cell(L?vn(iso(L.end)):'')+cell(V?vn(iso(V.start)):'')+cell(V?vn(iso(V.end)):'')+num(B.total)+cell(vn(B.deadline))+cell(V&&late(V)?'TRỄ HẠN':'Đúng hạn'));}).join('');
+    const kpi=[row(cell('BÁO CÁO KẾ HOẠCH SẢN XUẤT — MES PLANNER')),row(cell('Ngày xuất')+cell(new Date().toLocaleString('vi-VN'))),row(cell('Chế độ solver')+cell(solverMode)),row(cell('Khoảng kế hoạch')+cell(vn(iso(planRange.min))+' → '+vn(iso(planRange.max)))),row(cell('Tổng số lô')+num(keys.length)),row(cell('Tổng sản lượng (đôi)')+num(totLvf)),row(cell('Số lô trễ hạn')+num(lateN)),row(cell(''))].join('');
+    const ws=(n,inner)=>`<Worksheet ss:Name="${esc(n)}"><Table>${inner}</Table></Worksheet>`;
+    const xml='<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Styles><Style ss:ID="hdr"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#0F2A4A" ss:Pattern="Solid"/></Style></Styles>'+ws('KH LAF',HEAD+body(laf))+ws('KH LVF',HEAD+body(lvf))+ws('Tổng hợp',kpi+kHead+kBody)+'</Workbook>';
+    const blob=new Blob([xml],{type:'application/vnd.ms-excel'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download='KeHoachSX_'+iso(new Date()).replace(/-/g,'')+'.xls';
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),2000);
+    alert('✅ Đã xuất file Excel: 3 sheet (KH LAF · KH LVF · Tổng hợp). Kiểm tra thư mục Tải xuống.');
+  }catch(e){alert('Lỗi xuất Excel: '+e.message);}
+};
 
 /* ===== SCREEN: Tiến độ ===== */
 let progSel=null;
