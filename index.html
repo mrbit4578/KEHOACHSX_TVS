@@ -466,7 +466,7 @@ function renderTest(){
         <div class="field" style="margin-bottom:10px"><label>Mã hàng</label><select><option>Tất cả</option>${[...new Set(ORDERS.map(o=>o.code))].slice(0,8).map(c=>`<option>${c}</option>`).join('')}</select></div>
         <div class="field" style="margin-bottom:10px"><label>Màu</label><select><option>Tất cả</option>${colorList.map(c=>`<option>${c}</option>`).join('')}</select></div>
         <div class="field" style="margin-bottom:14px"><label>Size</label><select><option>Tất cả</option>${SIZES.map(s=>`<option>UK${s}</option>`).join('')}</select></div>
-        <button class="btn grn" style="width:100%">＋ Thêm cấu hình test riêng</button>
+        <button class="btn grn" style="width:100%" onclick="addBtp()">＋ Thêm cấu hình test riêng</button>
         <div class="sp16"></div>
         <div class="note">Đặc biệt: <b>Miếng cao su ép đế</b> hỗ trợ chọn độ dày <span class="kbd">2cm</span> &amp; <span class="kbd">6cm</span>.</div>
       </div>
@@ -483,19 +483,22 @@ window.delBtp=i=>{if(!confirm('Xoá BTP "'+BTP[i].name+'"?'))return;BTP.splice(i
 let capFactory='LAF';
 function renderCapacity(){
   const rows=CAP[capFactory].map((p,i)=>`<tr>
-    <td><b>${p.ph}</b></td><td>${p.from.split('-').reverse().join('/')}</td><td>${p.to.split('-').reverse().join('/')}</td>
-    <td class="num"><input type="number" min="0" class="field" style="width:90px;display:inline-block" value="${p.cap}" ${capLocked?'disabled':''} onchange="setCap('${capFactory}',${i},this.value)"> đôi/ngày</td>
+    <td><input class="field" style="width:140px" value="${p.ph}" onchange="setCapName('${capFactory}',${i},this.value)"></td>
+    <td><input type="date" class="field" value="${p.from}" onchange="setCapDate('${capFactory}',${i},'from',this.value)"></td>
+    <td><input type="date" class="field" value="${p.to}" onchange="setCapDate('${capFactory}',${i},'to',this.value)"></td>
+    <td class="num"><input type="number" min="0" class="field" style="width:90px;display:inline-block" value="${p.cap}" onchange="setCap('${capFactory}',${i},this.value)"> đôi/ngày</td>
+    <td><button class="btn sm gho" onclick="delCap('${capFactory}',${i})" title="Xoá giai đoạn">✕</button></td>
   </tr>`).join('');
   return `
   <div class="page-head"><div><h1>Năng xuất MT</h1><p>Cấu hình năng suất theo giai đoạn cho LAF &amp; LVF — làm baseline cho solver. Sau khi lưu sẽ được khoá cố định.</p></div><div class="spacer"></div>
-    ${capLocked?'<span class="lock">🔒 Đã khoá baseline</span><button class="btn sm gho" onclick="unlockCap()">Mở khoá</button>':'<button class="btn pri" onclick="lockCap()">🔒 Lưu &amp; khoá cố định</button>'}
+    <button class="btn pri" onclick="saveCap()">💾 Lưu &amp; áp dụng</button>
   </div>
   <div class="flex" style="margin-bottom:16px"><div class="seg"><button class="${capFactory==='LAF'?'on':''}" onclick="setCapF('LAF')">LAF (BTP cao su)</button><button class="${capFactory==='LVF'?'on':''}" onclick="setCapF('LVF')">LVF (gò ráp/hoàn tất)</button></div></div>
   <div class="row">
     <div class="col card" style="min-width:420px">
-      <div class="card-h"><h3>Capacity theo giai đoạn — ${capFactory}</h3></div>
-      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Giai đoạn</th><th>Từ ngày</th><th>Đến ngày</th><th class="num">Năng suất</th></tr></thead><tbody>${rows}</tbody></table></div>
-      <div class="card-pad"><div class="flex wrap"><div class="field" style="max-width:220px"><label>Thời gian test cộng vào LAF (ngày)</label><input type="number" min="0" value="${testBufferDays}" ${capLocked?'disabled':''} onchange="setBuffer(this.value)"></div><div class="field" style="max-width:220px"><label>BTP đi trước LVF (ngày)</label><input type="number" min="0" value="${lvfLagDays}" ${capLocked?'disabled':''} onchange="setLag(this.value)"></div></div></div>
+      <div class="card-h"><h3>Capacity theo giai đoạn — ${capFactory}</h3><div class="spacer"></div><button class="btn sm pri" onclick="addCap('${capFactory}')">＋ Thêm giai đoạn</button></div>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Giai đoạn</th><th>Từ ngày</th><th>Đến ngày</th><th class="num">Năng suất</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="card-pad"><div class="flex wrap"><div class="field" style="max-width:220px"><label>Thời gian test cộng vào LAF (ngày)</label><input type="number" min="0" value="${testBufferDays}" onchange="setBuffer(this.value)"></div><div class="field" style="max-width:220px"><label>BTP đi trước LVF (ngày)</label><input type="number" min="0" value="${lvfLagDays}" onchange="setLag(this.value)"></div></div></div>
     </div>
     <div class="col card" style="flex:0 0 420px;min-width:340px">
       <div class="card-h"><h3>Import sản lượng mục tiêu LAF</h3><span class="sub">chi tiết</span></div>
@@ -503,9 +506,9 @@ function renderCapacity(){
         <div class="dropzone" style="padding:18px"><div class="big">📊</div><div style="margin-top:6px;font-weight:600;color:var(--ink-2)">Upload sản lượng mục tiêu LAF</div><div style="margin-top:3px">Chi tiết theo ca / từng máy / từng chuyền / sản lượng 1 giờ</div></div>
         <div class="sp16"></div>
         <table class="tbl"><thead><tr><th>Ca</th><th>Máy</th><th>Chuyền</th><th class="num">Đôi/giờ</th><th></th></tr></thead><tbody>
-          ${SHIFTS.map((sh,i)=>`<tr><td><input class="field" style="width:70px" value="${sh.ca}" ${capLocked?'disabled':''} onchange="setShift(${i},'ca',this.value)"></td><td><input class="field" style="width:80px" value="${sh.may}" ${capLocked?'disabled':''} onchange="setShift(${i},'may',this.value)"></td><td><input class="field" style="width:60px" value="${sh.chuyen}" ${capLocked?'disabled':''} onchange="setShift(${i},'chuyen',this.value)"></td><td class="num"><input type="number" min="0" class="field" style="width:70px;text-align:right" value="${sh.perHour}" ${capLocked?'disabled':''} onchange="setShift(${i},'perHour',this.value)"></td><td>${capLocked?'':`<button class="btn sm gho" onclick="delShift(${i})">✕</button>`}</td></tr>`).join('')}
+          ${SHIFTS.map((sh,i)=>`<tr><td><input class="field" style="width:70px" value="${sh.ca}" onchange="setShift(${i},'ca',this.value)"></td><td><input class="field" style="width:80px" value="${sh.may}" onchange="setShift(${i},'may',this.value)"></td><td><input class="field" style="width:60px" value="${sh.chuyen}" onchange="setShift(${i},'chuyen',this.value)"></td><td class="num"><input type="number" min="0" class="field" style="width:70px;text-align:right" value="${sh.perHour}" onchange="setShift(${i},'perHour',this.value)"></td><td><button class="btn sm gho" onclick="delShift(${i})">✕</button></td></tr>`).join('')}
         </tbody></table>
-        ${capLocked?'':'<div class="sp16"></div><button class="btn sm" onclick="addShift()">＋ Thêm ca/máy</button>'}
+        <div class="sp16"></div><button class="btn sm pri" onclick="addShift()">＋ Thêm ca/máy</button>
         <div class="note" style="margin-top:12px">BTP chi tiết: Đế · Cao su nguyên tấm · Cao su nguyên tấm in · Cao su in sọc 3 lá · Foxing — mỗi loại có sản lượng mục tiêu riêng. BTP luôn đi trước cấp đầu vào LVF.</div>
       </div>
     </div>
@@ -515,16 +518,19 @@ function renderCapacity(){
     <div class="card-h"><h3>Cấu hình phom (LVF) &amp; khuôn đế (LAF) theo size</h3><span class="sub">nhập tay chi tiết từng size · map theo size chart đơn hàng</span></div>
     <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Loại</th>${SIZES.map(s=>`<th class="num">UK${s}</th>`).join('')}<th class="num">Tổng</th></tr></thead>
     <tbody>
-      <tr><td><b>Số phom (LVF)</b></td>${SIZES.map((s,i)=>`<td class="num"><input type="number" min="0" class="field" style="width:52px" value="${PHOM[i]||0}" ${capLocked?'disabled':''} onchange="setPhom(${i},this.value)"></td>`).join('')}<td class="num"><b>${PHOM.reduce((a,b)=>a+(+b||0),0)}</b></td></tr>
-      <tr><td><b>Số khuôn đế (LAF)</b></td>${SIZES.map((s,i)=>`<td class="num"><input type="number" min="0" class="field" style="width:52px" value="${KHUON[i]||0}" ${capLocked?'disabled':''} onchange="setKhuon(${i},this.value)"></td>`).join('')}<td class="num"><b>${KHUON.reduce((a,b)=>a+(+b||0),0)}</b></td></tr>
+      <tr><td><b>Số phom (LVF)</b></td>${SIZES.map((s,i)=>`<td class="num"><input type="number" min="0" class="field" style="width:52px" value="${PHOM[i]||0}" onchange="setPhom(${i},this.value)"></td>`).join('')}<td class="num"><b>${PHOM.reduce((a,b)=>a+(+b||0),0)}</b></td></tr>
+      <tr><td><b>Số khuôn đế (LAF)</b></td>${SIZES.map((s,i)=>`<td class="num"><input type="number" min="0" class="field" style="width:52px" value="${KHUON[i]||0}" onchange="setKhuon(${i},this.value)"></td>`).join('')}<td class="num"><b>${KHUON.reduce((a,b)=>a+(+b||0),0)}</b></td></tr>
     </tbody></table></div>
     <div class="card-pad"><div class="note">🔒 Sau khi khai báo &amp; lưu, hệ thống <b>fix cứng</b> tham số phom/khuôn đế &amp; năng suất — solver không được tự thay đổi.</div></div>
   </div>`;
 }
 window.setCapF=f=>{capFactory=f;mount('capacity');};
-window.lockCap=()=>{capLocked=true;saveState();runSolver();mount('capacity');};
-window.unlockCap=()=>{capLocked=false;saveState();mount('capacity');};
+window.saveCap=()=>{saveState();runSolver();alert('💾 Đã lưu cấu hình năng suất & áp dụng vào solver.\nMở màn Kế hoạch SX để xem lịch cập nhật.');mount('capacity');};
 window.setCap=(f,i,v)=>{CAP[f][i].cap=Math.max(0,+v||0);saveState();mount('capacity');};
+window.setCapName=(f,i,v)=>{CAP[f][i].ph=v;saveState();};
+window.setCapDate=(f,i,k,v)=>{if(!v)return;CAP[f][i][k]=v;saveState();mount('capacity');};
+window.addCap=f=>{const last=CAP[f][CAP[f].length-1];CAP[f].push({ph:'Giai đoạn mới',from:(last?last.to:'2026-07-01'),to:(last?last.to:'2026-08-01'),cap:0});saveState();mount('capacity');};
+window.delCap=(f,i)=>{if(CAP[f].length<=1){alert('Phải còn ít nhất 1 giai đoạn.');return;}if(!confirm('Xoá giai đoạn này?'))return;CAP[f].splice(i,1);saveState();mount('capacity');};
 window.setBuffer=v=>{testBufferDays=Math.max(0,+v||0);saveState();mount('capacity');};
 window.setLag=v=>{lvfLagDays=Math.max(0,+v||0);saveState();mount('capacity');};
 window.setShift=(i,k,v)=>{if(k==='perHour')v=Math.max(0,+v||0);SHIFTS[i][k]=v;saveState();mount('capacity');};
@@ -566,6 +572,7 @@ function renderPlan(){
     <td>${o.deadline.split('-').reverse().join('/')}</td></tr>`)).join('');
   return `
   <div class="page-head"><div><h1>Kế hoạch SX</h1><p>Color Grouping Solver — gom nhóm tối ưu, ưu tiên deadline sớm, giảm số lần pha hoá chất tại LAF</p></div><div class="spacer"></div>
+    <button class="btn" onclick="resetTestData()">♻️ Reset dữ liệu về 0</button>
     <button class="btn" onclick="exportPlan()">⬇ Export Excel (KH LAF · KH LVF · Tổng hợp)</button>
     <button class="btn grn" onclick="resolve()">⚡ Chạy solver</button></div>
   <div class="card card-pad" style="margin-bottom:16px">
@@ -589,7 +596,7 @@ function renderPlan(){
     <div class="gantt"><div class="gantt-inner" style="--cw:${cw}px"><div class="g-head"><div class="g-side">Lô / nhóm</div><div class="g-cells">${headCells}</div></div>${rows}</div></div>
   </div>
   <div class="card">
-    <div class="card-h"><h3>Kế hoạch chi tiết</h3><span class="sub">${planRows.length} lô</span></div>
+    <div class="card-h"><h3>K��� hoạch chi tiết</h3><span class="sub">${planRows.length} lô</span></div>
     <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Nhà máy</th><th>Nhóm màu</th><th>Bắt đầu</th><th>Kết thúc</th><th class="num">Khoảng TG</th><th class="num">SL mục tiêu/ngày</th><th class="num">Tổng SL mục tiêu</th><th class="num">Tổng SL tách</th><th class="num">Chênh lệch</th><th>Deadline</th></tr></thead><tbody>${det}</tbody></table></div>
   </div>
   <div class="sp16"></div>
