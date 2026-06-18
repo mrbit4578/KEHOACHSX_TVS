@@ -266,6 +266,7 @@ let BTP=[
 
 /* ===== SOLVER ===== */
 let solverMode='color';     // color | size | combined
+let lastSolve=null;
 let planRows=[];            // {factory,key,color,start,end,days,total,daily,split,dev}
 let planRange={min:null,max:null};
 
@@ -278,12 +279,12 @@ function runSolver(){
   // group orders
   let groups={};
   ORDERS.forEach(o=>{
-    let key = solverMode==='color'? o.color : solverMode==='size'? 'ALL' : o.color;
+    let key = solverMode==='color'? o.color : solverMode==='size'? (o.shape||'(không rõ hình thể)') : ((o.color||'')+' · '+(o.shape||''));
     (groups[key]=groups[key]||[]).push(o);
   });
   // build sorted group list by earliest deadline
   let glist=Object.entries(groups).map(([k,arr])=>({
-    key:k, orders:arr, color:(solverMode==='size'?colorList[0]:k),
+    key:k, orders:arr, color:arr[0].color,
     total:arr.reduce((s,o)=>s+o.total,0),
     deadline:arr.reduce((m,o)=>o.deadline<m?o.deadline:m,'9999')
   })).sort((a,b)=>a.deadline<b.deadline?-1:1);
@@ -316,6 +317,7 @@ function runSolver(){
   let all=planRows.flatMap(r=>[r.start,r.end]);
   planRange.min=new Date(Math.min(...all));
   planRange.max=new Date(Math.max(...all));
+  lastSolve=new Date();
 }
 
 /* ===== RENDER: components ===== */
@@ -603,9 +605,9 @@ function renderPlan(){
     <td class="num">${fmt(o.total)}</td>
     <td>${o.deadline.split('-').reverse().join('/')}</td></tr>`)).join('');
   return `
-  <div class="page-head"><div><h1>Kế hoạch SX</h1><p>Color Grouping Solver — gom nhóm tối ưu, ưu tiên deadline sớm, giảm số lần pha hoá chất tại LAF</p></div><div class="spacer"></div>
+  <div class="page-head"><div><h1>Kế hoạch SX</h1><p>Solver xếp lịch theo năng lực — ưu tiên deadline sớm (EDD). Chế độ: <b>${solverMode==='color'?'Theo màu':solverMode==='size'?'Theo hình thể (quay tua phom)':'Kết hợp màu + hình thể'}</b> · ${new Set(planRows.map(r=>r.key)).size} lô${lastSolve?' · đã chạy lúc '+lastSolve.toLocaleTimeString('vi-VN'):''}</p></div><div class="spacer"></div>
     <button class="btn" onclick="resetTestData()">♻️ Reset dữ liệu về 0</button>
-    <button class="btn" onclick="exportPlan()">⬇ Export Excel (KH LAF · KH LVF · Tổng hợp)</button>
+    <button class="btn" onclick="exportPlan()">⬇ Export Excel (KH · Tổng hợp · Chi tiết)</button>
     <button class="btn grn" onclick="resolve()">⚡ Chạy solver</button></div>
   <div class="card card-pad" style="margin-bottom:16px">
     <div class="flex wrap" style="gap:18px">
@@ -641,7 +643,7 @@ window.setMode=m=>{solverMode=m;runSolver();mount('plan');};
 window.setPV=v=>{planFactoryView=v;mount('plan');};
 window.setPlanPhom=v=>{planPhom=Math.max(0,+v||0);saveState();mount('plan');};
 window.setPlanKhuon=v=>{planKhuon=Math.max(0,+v||0);saveState();mount('plan');};
-window.resolve=()=>{runSolver();mount('plan');};
+window.resolve=()=>{runSolver();mount('plan');const nLo=new Set(planRows.map(r=>r.key)).size;alert('⚡ Solver đã chạy lúc '+(lastSolve?lastSolve.toLocaleTimeString('vi-VN'):'')+'\nChế độ: '+solverMode+' · '+nLo+' lô · '+fmt(ORDERS.reduce((s,o)=>s+(o.total||0),0))+' đôi.');};
 window.exportPlan=()=>{
   try{
     if(!planRows.length) runSolver();
@@ -662,14 +664,16 @@ window.exportPlan=()=>{
     const kHead=hd('Lô/Nhóm','Mã màu','LAF bắt đầu','LAF kết thúc','LVF bắt đầu','LVF kết thúc','Tổng SL (đôi)','Deadline','Trạng thái');
     const kBody=keys.map(k=>{const L=laf.find(r=>r.key===k),V=lvf.find(r=>r.key===k),B=V||L;return row(cell(k)+cell(B.color)+cell(L?vn(iso(L.start)):'')+cell(L?vn(iso(L.end)):'')+cell(V?vn(iso(V.start)):'')+cell(V?vn(iso(V.end)):'')+num(B.total)+cell(vn(B.deadline))+cell(V&&late(V)?'TRỄ HẠN':'Đúng hạn'));}).join('');
     const kpi=[row(cell('BÁO CÁO KẾ HOẠCH SẢN XUẤT — MES PLANNER')),row(cell('Ngày xuất')+cell(new Date().toLocaleString('vi-VN'))),row(cell('Chế độ solver')+cell(solverMode)),row(cell('Khoảng kế hoạch')+cell(vn(iso(planRange.min))+' → '+vn(iso(planRange.max)))),row(cell('Tổng số lô')+num(keys.length)),row(cell('Tổng sản lượng (đôi)')+num(totLvf)),row(cell('Số lô trễ hạn')+num(lateN)),row(cell(''))].join('');
+    const dHead=hd('Nhà máy','Brand','Quốc gia','ĐH TVS-Elite','ĐH khách hàng','Mã hàng','Màu','Bắt đầu','Kết thúc','SL đơn','Deadline');
+    const dBody=planRows.flatMap(r=>(r.orders||[]).map(o=>row(cell(r.factory)+cell(o.brand)+cell(o.country)+cell(o.tvs)+cell(o.cust)+cell(o.code)+cell(o.colorName||o.color)+cell(vn(iso(r.start)))+cell(vn(iso(r.end)))+num(o.total)+cell(vn(o.deadline))))).join('');
     const ws=(n,inner)=>`<Worksheet ss:Name="${esc(n)}"><Table>${inner}</Table></Worksheet>`;
-    const xml='<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Styles><Style ss:ID="hdr"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#0F2A4A" ss:Pattern="Solid"/></Style></Styles>'+ws('KH LAF',HEAD+body(laf))+ws('KH LVF',HEAD+body(lvf))+ws('Tổng hợp',kpi+kHead+kBody)+'</Workbook>';
+    const xml='<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Styles><Style ss:ID="hdr"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#0F2A4A" ss:Pattern="Solid"/></Style></Styles>'+ws('KH LAF',HEAD+body(laf))+ws('KH LVF',HEAD+body(lvf))+ws('Tổng hợp',kpi+kHead+kBody)+ws('Chi tiết theo đơn',dHead+dBody)+'</Workbook>';
     const blob=new Blob([xml],{type:'application/vnd.ms-excel'});
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a');a.href=url;a.download='KeHoachSX_'+iso(new Date()).replace(/-/g,'')+'.xls';
     document.body.appendChild(a);a.click();a.remove();
     setTimeout(()=>URL.revokeObjectURL(url),2000);
-    alert('✅ Đã xuất file Excel: 3 sheet (KH LAF · KH LVF · Tổng hợp). Kiểm tra thư mục Tải xuống.');
+    alert('✅ Đã xuất file Excel: 4 sheet (KH LAF · KH LVF · Tổng hợp · Chi tiết theo đơn). Kiểm tra thư mục Tải xuống.');
   }catch(e){alert('Lỗi xuất Excel: '+e.message);}
 };
 
